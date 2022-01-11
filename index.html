@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang='en'>
+  <head>
+    <meta charset='UTF-8'/>
+    <title>Flower field</title>
+    <link rel='stylesheet' href='./styles.css'>
+  </head>
+  <body>
+    <canvas id="canvas"></canvas>
+    <div class="fpsContainer">
+        <span id="fps"></span> FPS
+    </div>
+    <div id="uiContainer">
+        <div id="ui"></div>
+    </div>
+  </body>
+</html>
+<!-- vertex shader -->
+<script  id="flower-vs" type="x-shader/x-vertex">
+  #define MAX_LIGHTS 20
+
+  attribute vec4 a_position;
+  attribute vec2 a_texcoord;
+  attribute vec3 a_normal;
+  
+  uniform mat4 u_view;
+  uniform mat4 u_projection;
+  uniform mat4 u_world;
+  uniform mat4 u_worldInverseTranspose;
+
+  struct Light {
+    highp vec3 position;
+    highp vec3 color;
+    highp vec3 specularColor;
+    highp int type;
+    highp float intensity;
+  };
+
+  uniform Light u_lights[MAX_LIGHTS];
+  uniform int u_lightCount;
+
+  //uniform vec3 u_lightWorldPosition;
+
+  uniform vec3 u_viewWorldPosition;
+  
+  varying vec2 v_texcoord;
+  varying float v_fogDepth;
+  varying float v_distsToLights[MAX_LIGHTS];
+  varying vec3 v_normal;
+  varying vec3 v_surfacesToLights[MAX_LIGHTS];
+  varying vec3 v_surfaceToView;
+  
+  void main() {
+    // Multiply the position by the matrix.
+    gl_Position = u_projection * u_view * u_world * a_position;
+  
+    // Pass the texcoord to the fragment shader.
+    v_texcoord = a_texcoord;
+  
+    // Pass just the negated z position relative to the camera.
+    // the camera is looking in the -z direction so normally stuff
+    // in front of the camera has a negative Z position
+    // but by negating he we get a positive depth.
+    v_fogDepth = -(u_view * u_world * a_position).z;
+  
+    // orient the normals and pass to the fragment shader
+    v_normal = mat3(u_worldInverseTranspose) * a_normal;
+  
+    // compute the world position of the surface
+    vec3 surfaceWorldPosition = (u_world * a_position).xyz;
+  
+    // compute the vector of the surface to the light
+    // and pass it to the fragment shader
+    for(int i = 0; i < MAX_LIGHTS; i++) {
+      if(i >= u_lightCount) break;
+      v_surfacesToLights[i] = u_lights[i].position - surfaceWorldPosition;
+      float lightDist = length(v_surfacesToLights[i]);
+      v_distsToLights[i] = lightDist;
+    }
+  
+    // compute the vector of the surface to the view/camera
+    // and pass it to the fragment shader
+    v_surfaceToView = normalize(u_viewWorldPosition - surfaceWorldPosition);
+
+    //v_distToLight = length(u_lightWorldPosition - (u_world * a_position).xyz);
+  }
+  </script>
+  <!-- fragment shader -->
+  <script  id="flower-fs" type="x-shader/x-fragment">
+  precision highp float;
+
+  #define MAX_LIGHTS 20
+  
+  // Passed in from the vertex shader.
+  varying vec2 v_texcoord;
+  varying float v_fogDepth;
+  varying vec3 v_normal;
+  varying vec3 v_surfacesToLights[MAX_LIGHTS];
+  varying vec3 v_surfaceToView;
+  varying float v_distsToLights[MAX_LIGHTS];
+
+  struct Light {
+    highp vec3 position;
+    highp vec3 color;
+    highp vec3 specularColor;
+    highp int type;
+    highp float intensity;
+  };
+
+  uniform Light u_lights[MAX_LIGHTS];
+  uniform highp int u_lightCount;
+  uniform vec3 u_ambientColor;
+  uniform float u_lightConstant;
+  uniform float u_lightLinear;
+  uniform float u_lightQuadratic;
+  
+  uniform float u_shininess;
+  uniform int u_nocolor;
+  uniform bool u_blinn;
+
+  uniform vec4 u_fogColor;
+  uniform float u_fogNear;
+  uniform float u_fogFar;
+  
+  // The texture.
+  uniform sampler2D u_texture;
+  
+  void main() {
+    vec4 color = texture2D(u_texture, v_texcoord);
+    if(color.a < 0.1) discard;
+  
+    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+
+    // because v_normal is a varying it's interpolated
+    // so it will not be a unit vector. Normalizing it
+    // will make it a unit vector again
+    vec3 normal = normalize(v_normal);
+
+    vec3 surfaceToViewDirection = normalize(v_surfaceToView);
+    for(int i = 0; i < MAX_LIGHTS; i++) {
+      if(i >= u_lightCount) break;
+      vec3 surfaceToLightDirection = normalize(v_surfacesToLights[i]);
+      float light = dot(normal, surfaceToLightDirection);// / v_distToLight;
+      float specular = 0.0;
+      if(u_blinn) {
+        vec3 halfVector = normalize(surfaceToLightDirection + surfaceToViewDirection);
+        specular = pow(max(0.0, dot(normal, halfVector)), u_shininess);
+      } else {
+        vec3 reflectDir = reflect(-surfaceToLightDirection, normal);
+        specular = pow(max(0.0, dot(surfaceToViewDirection, reflectDir)), u_shininess);
+      }
+
+      float linear = 0.0;
+      float quadratic = 0.0;
+      if(u_lights[i].type == 1) {
+        linear = 0.7;
+        quadratic = 2.0;
+      }
+
+      float attenuation = 1.0 / (1.0 + v_distsToLights[i] * linear + v_distsToLights[i] * v_distsToLights[i] * quadratic);
+    
+      // Lets multiply just the color portion (not the alpha)
+      // by the light
+      gl_FragColor.rgb += color.rgb * light * u_lights[i].color * u_lights[i].intensity * attenuation;
+    
+      // Just add in the specular
+      gl_FragColor.rgb += specular * u_lights[i].specularColor * u_lights[i].intensity * attenuation;
+    }
+
+    //gl_FragColor.rgb += vec3(vec4(u_ambientColor, 1.0) * 0.1 * color);
+    //if(color.a > 0.01) {
+    if(u_nocolor > 0) {
+      gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+    }
+
+      float fogAmount = smoothstep(u_fogNear, u_fogFar, v_fogDepth);
+      gl_FragColor = mix(gl_FragColor, u_fogColor, u_nocolor == 0 ? fogAmount : u_nocolor == 1 ?  0.5 * fogAmount : 0.0);
+
+      
+    //}
+  }
+</script>
+
+<!--
+for most samples webgl-utils only provides shader compiling/linking and
+canvas resizing because why clutter the examples with code that's the same in every sample.
+See https://webglfundamentals.org/webgl/lessons/webgl-boilerplate.html
+and https://webglfundamentals.org/webgl/lessons/webgl-resizing-the-canvas.html
+for webgl-utils, m3, m4, and webgl-lessons-ui.
+-->
+<script src="https://webglfundamentals.org/webgl/resources/webgl-utils.js"></script>
+<script src="https://webglfundamentals.org/webgl/resources/m4.js"></script>
+<script src="https://webglfundamentals.org/webgl/resources/webgl-lessons-ui.js"></script>
+<script src='./perlin.js'></script>
+<script type="module" src='./script.js'></script>
