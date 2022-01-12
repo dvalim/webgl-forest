@@ -59,11 +59,13 @@ function main() {
   let cameraTranslate = [0, 0, 0];
   let mouseNormX = 0.5,
     mouseNormY = 0.3;
+  let ambient = 0;
   let bgColor = fogColor;
   let fogDistance = 0;
   let plants = [];
   let trees = [];
   let fireflies = [];
+  let plantTypes = 6;
 
   const textures = twgl.createTextures(gl, {
     plants: {
@@ -229,20 +231,21 @@ function main() {
     },
   ]);
 
-  let plantCount = settings.objectCount * settings.objectCount / 3;
+  let plantCount = settings.objectCount * settings.objectCount / 4;
+  let treeCount = settings.objectCount * 1.5;
 
   for(let i = 0; i < plantCount; i++) {
     plants = [...plants, {
       x: rand(-settings.fieldSize, settings.fieldSize),
-      y: 0.5,
+      y: 0,
       z: rand(-settings.fieldSize, settings.fieldSize),
-      type: Math.floor(rand(0, 6)),
+      type: Math.floor(rand(0, plantTypes)),
       rotate: rand(0, 2*Math.PI),
-      w: rand(1, 4)
+      w: rand(2, 3)
     }]
   }
 
-  for(let i = 0; i < settings.objectCount; i++) {
+  for(let i = 0; i < treeCount; i++) {
     trees = [...trees, {
       x: rand(-settings.fieldSize, settings.fieldSize),
       y: 25,
@@ -268,12 +271,9 @@ function main() {
   let then = 0;
   const fpsElem = document.querySelector("#fps");
 
-  function shuffleArray(array) {
-    for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-    }
-}
+  function dis(v1, v2) {
+    return v1.map((el, id) => (el - v2[id])*(el - v2[id])).reduce((a, b) => a + b);
+  }
 
   function render(time) {
     time *= 0.001; // convert to seconds
@@ -288,6 +288,9 @@ function main() {
     if(keys['KeyS']) cameraTranslate = [cameraTranslate[0], cameraTranslate[1], cameraTranslate[2]+movementSpeed];
     if(keys['KeyA']) cameraTranslate = [cameraTranslate[0]-movementSpeed, cameraTranslate[1], cameraTranslate[2]];
     if(keys['KeyD']) cameraTranslate = [cameraTranslate[0]+movementSpeed, cameraTranslate[1], cameraTranslate[2]];
+    if(keys['KeyZ']) cameraTranslate = [cameraTranslate[0], cameraTranslate[1]-movementSpeed, cameraTranslate[2]];
+    if(keys['KeyX']) cameraTranslate = [cameraTranslate[0], cameraTranslate[1]+movementSpeed, cameraTranslate[2]];
+
 
     twgl.resizeCanvasToDisplaySize(gl.canvas);
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
@@ -302,7 +305,8 @@ function main() {
       moonPosition = [Math.cos(dayTime + Math.PI) * settings.fieldSize, Math.sin(dayTime + Math.PI) * settings.fieldSize, 0];
       sunColor = interp(sunColor, moonColor, Math.sin(dayTime) / 2 + 0.5);
       sunIntensity = interp([1.0], [0.01], Math.sin(dayTime) / 2 + 0.5);
-      fogDistance = interp([settings.fogFar], [settings.fogFar * 1.3], Math.sin(dayTime) / 2 + 0.5)
+      fogDistance = interp([settings.fogFar], [settings.fogFar * 1.3], Math.sin(dayTime) / 2 + 0.5);
+      ambient = interp([0.0], [0.0], Math.sin(dayTime) / 2 + 0.5)[0];
     }
     gl.clearColor(...bgColor);
 
@@ -311,7 +315,7 @@ function main() {
     const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
     m4.perspective(fieldOfViewRadians, aspect, 1, 2000, projection);
 
-    let cameraPosition = [0 + cameraTranslate[0], 3 + cameraTranslate[1], 0 + cameraTranslate[2]];
+    let cameraPosition = [0 + cameraTranslate[0], 2.5 + cameraTranslate[1], 0 + cameraTranslate[2]];
     let up = [0, 1, 0];
     let target = [Math.cos(mouseNormX * Math.PI * 2) + cameraPosition[0], 4 - 4 * mouseNormY, Math.sin(mouseNormX * Math.PI * 2) + cameraPosition[2]];
     if (settings.camera == 1) {
@@ -351,7 +355,7 @@ function main() {
       fireflies[i].y += Math.cos(a2) * fireflies[i].speed / 10;
     }
 
-    let lights = fireflies.sort((a, b) => a.y - b.y).map(f => {return {position: [f.x, f.y, f.z], color: fireflyColor, specularColor: fireflyColor, type: 1, intensity: 2}});
+    let lights = fireflies.sort((a, b) => dis([a.x, a.y, a.z], cameraPosition) - dis([b.x, b.y, b.z], cameraPosition)).map(f => {return {position: [f.x, f.y, f.z], color: fireflyColor, specularColor: fireflyColor, type: 1, intensity: 2}});
     lights = [sunLight, ...lights.slice(0, 19)];
 
     let flashPosition = [cameraPosition[0], cameraPosition[1]-0.5, cameraPosition[2]];
@@ -377,7 +381,8 @@ function main() {
       u_lightCount: lights.length,
       u_flash: settings.flashlight,
       u_flashPosition: flashPosition,
-      u_flashDirection: [target[0] - flashPosition[0], target[1] -0.5 - flashPosition[1], target[2] - flashPosition[2]]
+      u_flashDirection: [target[0] - flashPosition[0], target[1] -0.5 - flashPosition[1], target[2] - flashPosition[2]],
+      u_ambient: 0
     });
 
     // plants
@@ -386,14 +391,17 @@ function main() {
     for (let i = 0; i < plantCount; i++) {
       let scale = 0.1;
       let a = noise.perlin3(plants[i].x * scale, plants[i].z * scale, time * 0.7) * Math.PI * 0.1;
+      //let off1 = 0, off2 = 0;
       let off1 = Math.cos(a), off2 = Math.sin(a);
       let pos = [plants[i].x - off2, plants[i].y, plants[i].z + off1]
       let world = m4.translate(m4.identity(), pos);
-      world = m4.translate(world, [0, plants[i].w/5, 0]);
+      world = m4.translate(world, [0, plants[i].w/2, 0]);
       world = m4.scale(world, [plants[i].w, plants[i].w, plants[i].w]);
-      world = m4.rotateX(world, Math.PI / 5 + off1);
+      world = m4.rotateX(world, Math.PI / 5.5 + off1);
       world = m4.rotateY(world, off2);
-      world = m4.rotateZ(world, plants[i].rotate);
+      let ang = Math.atan2( target[2] - cameraPosition[2], target[0] - cameraPosition[0] );
+      //world = m4.rotateZ(world, ang + Math.PI / 2);
+      //world = m4.rotateZ(world, plants[i].rotate);
       let worldInverseTranspose = m4.transpose(m4.inverse(world));
 
       twgl.setUniforms(programInfo, {
@@ -401,7 +409,7 @@ function main() {
         u_world: world,
         u_texture: twoDTextures[0],
       });
-      let xoff = 1.0 / 6.0;
+      let xoff = 1.0 / plantTypes;
       let xcoord = plants[i].type*xoff;
       twgl.setAttribInfoBufferFromArray(gl, shape.attribs.a_texcoord, new Float32Array([xcoord, 0, xcoord+xoff, 0, xcoord, 1, xcoord+xoff, 1]));
 
@@ -426,7 +434,7 @@ function main() {
       u_texture: textures.bark,
     });
     
-    for (let i = 0; i < settings.objectCount; i++) {
+    for (let i = 0; i < treeCount; i++) {
       
       let pos = [trees[i].x, trees[i].y, trees[i].z];
       let world = m4.scale(m4.translate(m4.identity(), pos), [trees[i].w, 1, trees[i].w]);
@@ -445,33 +453,42 @@ function main() {
     // ground
 
     shape = shapes[1];
-    let pos = [0, 0, 0]
-    let world = m4.translate(m4.scale(m4.identity(), [settings.fieldSize * 5 , 1.0, settings.fieldSize * 5 ]), pos);
+    
+
+    twgl.setUniforms(programInfo, {
+      u_texture: textures.ground,
+      u_shininess: settings.groundShininess,
+      u_subdivide: 0.25
+    });
+
+    twgl.setAttribInfoBufferFromArray(gl, shape.attribs.a_texcoord, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]));
+    twgl.setBuffersAndAttributes(gl, programInfo, shape);
+
+    let groundScale = 5;
+    for(let i = -settings.fieldSize; i <= settings.fieldSize; i+=groundScale)
+      for(let j = -settings.fieldSize; j <= settings.fieldSize; j+=groundScale) {
+        let world = m4.translate(m4.identity(), [i, 0, j]);
+        world = m4.scale(world, [groundScale, groundScale, groundScale]);
+        let worldInverseTranspose = m4.transpose(m4.inverse(world));
+
+        twgl.setUniforms(programInfo, {
+          u_worldInverseTranspose: worldInverseTranspose,
+          u_world: world,
+        });
+        twgl.drawBufferInfo(gl, shape);
+      }
+
+    // sun and moon
+
+    shape = shapes[0];
+    let world = m4.translate(m4.scale(m4.identity(), [2, 2, 2]), sunPosition);
     let worldInverseTranspose = m4.transpose(m4.inverse(world));
 
     twgl.setUniforms(programInfo, {
       u_worldInverseTranspose: worldInverseTranspose,
       u_world: world,
-      u_texture: textures.ground,
-      u_shininess: settings.groundShininess,
-      u_subdivide: 2,
-    });
-
-    twgl.setAttribInfoBufferFromArray(gl, shape.attribs.a_texcoord, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]));
-    twgl.setBuffersAndAttributes(gl, programInfo, shape);
-    twgl.drawBufferInfo(gl, shape);
-
-    // sun and moon
-
-    shape = shapes[0];
-    world = m4.translate(m4.scale(m4.identity(), [2, 2, 2]), sunPosition);
-    worldInverseTranspose = m4.transpose(m4.inverse(world));
-
-    twgl.setUniforms(programInfo, {
-      u_worldInverseTranspose: worldInverseTranspose,
-      u_world: world,
       u_nocolor: 2,
-      u_subdivide: 1.0
+      u_subdivide: 0
     });
 
     twgl.setBuffersAndAttributes(gl, programInfo, shape);

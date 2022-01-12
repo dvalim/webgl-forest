@@ -38,7 +38,7 @@
 
   uniform Light u_lights[MAX_LIGHTS];
   uniform int u_lightCount;
-
+  
   uniform vec3 u_viewWorldPosition;
   uniform highp vec3 u_flashPosition;
   
@@ -62,7 +62,7 @@
     // the camera is looking in the -z direction so normally stuff
     // in front of the camera has a negative Z position
     // but by negating he we get a positive depth.
-    v_fogDepth = -(u_view * u_world * a_position).z;
+    v_fogDepth = length(u_viewWorldPosition - (u_world * a_position).xyz);
   
     // orient the normals and pass to the fragment shader
     v_normal = mat3(u_worldInverseTranspose) * a_normal;
@@ -118,6 +118,7 @@
   uniform float u_lightConstant;
   uniform float u_lightLinear;
   uniform float u_lightQuadratic;
+  uniform float u_ambient;
   
   uniform float u_shininess;
   uniform int u_nocolor;
@@ -137,7 +138,7 @@
   
   void main() {
     vec2 texcoord = v_texcoord;
-    if(u_subdivide >= 2.0) {
+    if(u_subdivide > 0.0) {
       texcoord *= u_subdivide;
       texcoord = fract(texcoord);
     }
@@ -155,8 +156,9 @@
     vec3 surfaceToViewDirection = normalize(v_surfaceToView);
     for(int i = 0; i < MAX_LIGHTS; i++) {
       if(i >= u_lightCount) break;
+      
       vec3 surfaceToLightDirection = normalize(v_surfacesToLights[i]);
-      float light = dot(normal, surfaceToLightDirection);// / v_distToLight;
+      float light = max(0.0, dot(normal, surfaceToLightDirection));
       float specular = 0.0;
       if(u_blinn) {
         vec3 halfVector = normalize(surfaceToLightDirection + surfaceToViewDirection);
@@ -181,6 +183,9 @@
     
       // Just add in the specular
       resColor.rgb += specular * u_lights[i].specularColor * u_lights[i].intensity * attenuation;
+
+      resColor.rgb += u_ambient * color.rgb * u_lights[i].color * attenuation;
+
     }
 
     if(u_flash) {
@@ -191,7 +196,7 @@
       float epsilon   = inner - outer;
       float intensity = clamp((theta - outer) / epsilon, 0.0, 1.0); 
       if(theta > outer) {
-        float light = dot(normal, surfaceToFlash);
+        float light = max(0.0, dot(normal, surfaceToFlash));
         float specular = 0.0;
         if(u_blinn) {
           vec3 halfVector = normalize(surfaceToFlash + surfaceToViewDirection);
@@ -201,9 +206,8 @@
           specular = pow(max(0.0, dot(surfaceToViewDirection, reflectDir)), u_shininess);
         }
         float attenuation = 1.0 / (1.0 + v_distToFlash * 0.09 + v_distToFlash * v_distToFlash * 0.032);
-        resColor.rgb += color.rgb * light * vec3(1.0, 1.0, 1.0) * intensity;
-        // Just add in the specular
-        resColor.rgb += specular * vec3(1.0, 1.0, 1.0) * intensity;
+        resColor.rgb += color.rgb * light * vec3(1.0, 1.0, 1.0) * intensity * attenuation;
+        resColor.rgb += specular * vec3(1.0, 1.0, 1.0) * intensity * attenuation;
       }
     }
 
@@ -214,8 +218,8 @@
     }
 
     float fogAmount = smoothstep(u_fogNear, u_fogFar, v_fogDepth);
-    resColor = mix(resColor, u_fogColor, u_nocolor == 0 ? fogAmount : u_nocolor == 1 ?  0.5 * fogAmount : 0.0);
-    gl_FragColor = resColor;
+    resColor = mix(resColor, u_fogColor, u_nocolor == 0 ? fogAmount : u_nocolor == 1 ?  0.75 * fogAmount : 0.0);
+    gl_FragColor = clamp(resColor, 0.0, 1.0);
     //}
   }
 </script>
