@@ -28,11 +28,12 @@ function main() {
 
   const m4 = twgl.m4;
   const gl = document.querySelector("#canvas").getContext("webgl");
-  const flowerProgramInfo = twgl.createProgramInfo(gl, ["flower-vs", "flower-fs"]);
+  const programInfo = twgl.createProgramInfo(gl, ["vs", "fs"]);
 
   const shapes = [
     twgl.primitives.createSphereBufferInfo(gl, 1, 6, 6),
     twgl.primitives.createPlaneBufferInfo(gl, 1, 1),
+    twgl.primitives.createCylinderBufferInfo(gl, 0.5, 50, 5, 2),
     twgl.primitives.createCylinderBufferInfo(gl, 0.5, 50, 12, 2),
   ];
 
@@ -48,8 +49,10 @@ function main() {
   const projection = m4.identity();
   const view = m4.identity();
   const fieldOfViewRadians = 60 * Math.PI / 180.0;
-  const fogColor = [0.8, 0.9, 1, 1];
-  let sunColor = [1.0, 0.2, 0.5];
+  const fogColor = [0.78, 0.75, 0.87, 1];
+  let sunColor = [1.0, 1.0, 0.984];
+  let moonColor = [0.5, 0.5, 0.6];
+  let fireflyColor = [0.9, 1, 0.2];
   let sunIntensity = [1.0];
   let sunPosition = [0, 0, 0],
     moonPosition = [0, 0, 0];
@@ -57,27 +60,28 @@ function main() {
   let mouseNormX = 0.5,
     mouseNormY = 0.3;
   let bgColor = fogColor;
+  let fogDistance = 0;
   let plants = [];
   let trees = [];
   let fireflies = [];
 
   const textures = twgl.createTextures(gl, {
-    flower: {
-      src: "https://i.imgur.com/6WZtbZC.png",
-
-    },
-    grass: {
-      src: "https://i.imgur.com/kDNA0nv.png",
-
+    plants: {
+      src: "./plants.png",
+      minMag: gl.NEAREST
     },
     ground: {
-      src: "https://i.imgur.com/LAf0iAz.jpeg",
-
+      src: "./grass.png",
+      minMag: gl.NEAREST
+    },
+    bark: {
+      src: "./bark.png",
+      minMag: gl.NEAREST
     }
   });
 
   const twoDTextures = [
-    textures.flower,
+    textures.plants,
     textures.grass,
     textures.ground,
     textures.stone
@@ -225,14 +229,16 @@ function main() {
     },
   ]);
 
-  for(let i = 0; i < settings.objectCount * settings.objectCount; i++) {
+  let plantCount = settings.objectCount * settings.objectCount / 3;
+
+  for(let i = 0; i < plantCount; i++) {
     plants = [...plants, {
       x: rand(-settings.fieldSize, settings.fieldSize),
       y: 0.5,
       z: rand(-settings.fieldSize, settings.fieldSize),
-      texture: Math.floor(rand(0, 2)),
+      type: Math.floor(rand(0, 6)),
       rotate: rand(0, 2*Math.PI),
-      w: rand(0.5, 1.5)
+      w: rand(1, 4)
     }]
   }
 
@@ -241,7 +247,8 @@ function main() {
       x: rand(-settings.fieldSize, settings.fieldSize),
       y: 25,
       z: rand(-settings.fieldSize, settings.fieldSize),
-      w: rand(0.5, 2)
+      w: rand(0.5, 2),
+      shape: Math.floor(rand(2, 3.9))
     }]
   }
 
@@ -289,12 +296,13 @@ function main() {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     if(settings.dayNightCycle) {
-      let dayTime = time * 0.2;
-      bgColor = interp(fogColor, [0, 0, 0, 1], Math.sin(dayTime) / 2 + 0.5);
+      let dayTime = time*0.2;
+      bgColor = interp(fogColor, [0.02, 0.05, 0.08, 1], Math.sin(dayTime) / 2 + 0.5);
       sunPosition = [Math.cos(dayTime) * settings.fieldSize, Math.sin(dayTime) * settings.fieldSize, 0];
       moonPosition = [Math.cos(dayTime + Math.PI) * settings.fieldSize, Math.sin(dayTime + Math.PI) * settings.fieldSize, 0];
-      sunColor = interp([1, 0.6, 0.6], [0, 0.5, 1, 1], Math.sin(dayTime) / 2 + 0.5);
+      sunColor = interp(sunColor, moonColor, Math.sin(dayTime) / 2 + 0.5);
       sunIntensity = interp([1.0], [0.01], Math.sin(dayTime) / 2 + 0.5);
+      fogDistance = interp([settings.fogFar], [settings.fogFar * 1.3], Math.sin(dayTime) / 2 + 0.5)
     }
     gl.clearColor(...bgColor);
 
@@ -328,7 +336,7 @@ function main() {
       intensity: sunIntensity[0]
     }
 
-    let fireflyColor = [0, 1, 1];
+    
     for(let i = 0; i < settings.fireflyCount; i++) {
       let scale = 0.5;
       let a = noise.perlin3(fireflies[i].x * scale, fireflies[i].y * scale, time * 0.1) * Math.PI;
@@ -348,15 +356,14 @@ function main() {
 
     let flashPosition = [cameraPosition[0], cameraPosition[1]-0.5, cameraPosition[2]];
 
-    gl.useProgram(flowerProgramInfo.program);
-    twgl.setUniforms(flowerProgramInfo, {
+    gl.useProgram(programInfo.program);
+    twgl.setUniforms(programInfo, {
       u_lightWorldPosition: sunPosition,
-      u_fogFar: settings.fogFar,
       u_projection: projection,
       u_view: view,
       u_fogColor: bgColor,
       u_fogNear: settings.fogNear,
-      u_fogFar: settings.fogFar,
+      u_fogFar: fogDistance,
       u_viewWorldPosition: cameraPosition,
       u_nocolor: 0,
       u_blinn: settings.blinn,
@@ -375,57 +382,63 @@ function main() {
 
     // plants
     let shape = shapes[1];
-    twgl.setBuffersAndAttributes(gl, flowerProgramInfo, shape);
-    for (let i = 0; i < settings.objectCount * settings.objectCount; i++) {
+    twgl.setBuffersAndAttributes(gl, programInfo, shape);
+    for (let i = 0; i < plantCount; i++) {
       let scale = 0.1;
       let a = noise.perlin3(plants[i].x * scale, plants[i].z * scale, time * 0.7) * Math.PI * 0.1;
       let off1 = Math.cos(a), off2 = Math.sin(a);
       let pos = [plants[i].x - off2, plants[i].y, plants[i].z + off1]
       let world = m4.translate(m4.identity(), pos);
       world = m4.translate(world, [0, plants[i].w/5, 0]);
-      if(plants[i].texture == 1) world = m4.scale(m4.translate(world, [0, 0.5, 0]), [1.2, 1.5, 1.2]);
       world = m4.scale(world, [plants[i].w, plants[i].w, plants[i].w]);
       world = m4.rotateX(world, Math.PI / 5 + off1);
       world = m4.rotateY(world, off2);
       world = m4.rotateZ(world, plants[i].rotate);
       let worldInverseTranspose = m4.transpose(m4.inverse(world));
 
-      twgl.setUniforms(flowerProgramInfo, {
+      twgl.setUniforms(programInfo, {
         u_worldInverseTranspose: worldInverseTranspose,
         u_world: world,
-        u_texture: twoDTextures[plants[i].texture],
+        u_texture: twoDTextures[0],
       });
+      let xoff = 1.0 / 6.0;
+      let xcoord = plants[i].type*xoff;
+      twgl.setAttribInfoBufferFromArray(gl, shape.attribs.a_texcoord, new Float32Array([xcoord, 0, xcoord+xoff, 0, xcoord, 1, xcoord+xoff, 1]));
 
       twgl.drawBufferInfo(gl, shape);
       world = m4.rotateZ(world, Math.PI / 2);
       worldInverseTranspose = m4.transpose(m4.inverse(world));
 
-      twgl.setUniforms(flowerProgramInfo, {
+      twgl.setUniforms(programInfo, {
         u_worldInverseTranspose: worldInverseTranspose,
         u_world: world
       });
+      
       twgl.drawBufferInfo(gl, shape);
     }
 
+    
+
     // trees
 
-    twgl.setUniforms(flowerProgramInfo, {
+    twgl.setUniforms(programInfo, {
       u_shininess: 1,
-      u_texture: textures.stone,
+      u_texture: textures.bark,
     });
-    shape = shapes[2];
-    twgl.setBuffersAndAttributes(gl, flowerProgramInfo, shape);
-
+    
     for (let i = 0; i < settings.objectCount; i++) {
+      
       let pos = [trees[i].x, trees[i].y, trees[i].z];
       let world = m4.scale(m4.translate(m4.identity(), pos), [trees[i].w, 1, trees[i].w]);
       let worldInverseTranspose = m4.transpose(m4.inverse(world));
 
-      twgl.setUniforms(flowerProgramInfo, {
+      twgl.setUniforms(programInfo, {
         u_worldInverseTranspose: worldInverseTranspose,
         u_world: world,
       });
 
+      shape = shapes[trees[i].shape];
+      twgl.setBuffersAndAttributes(gl, programInfo, shape);
       twgl.drawBufferInfo(gl, shape);
     }
 
@@ -433,17 +446,19 @@ function main() {
 
     shape = shapes[1];
     let pos = [0, 0, 0]
-    let world = m4.translate(m4.scale(m4.identity(), [settings.fieldSize * 5, 1, settings.fieldSize * 5]), pos);
+    let world = m4.translate(m4.scale(m4.identity(), [settings.fieldSize * 5 , 1.0, settings.fieldSize * 5 ]), pos);
     let worldInverseTranspose = m4.transpose(m4.inverse(world));
 
-    twgl.setUniforms(flowerProgramInfo, {
+    twgl.setUniforms(programInfo, {
       u_worldInverseTranspose: worldInverseTranspose,
       u_world: world,
       u_texture: textures.ground,
       u_shininess: settings.groundShininess,
+      u_subdivide: 2,
     });
 
-    twgl.setBuffersAndAttributes(gl, flowerProgramInfo, shape);
+    twgl.setAttribInfoBufferFromArray(gl, shape.attribs.a_texcoord, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]));
+    twgl.setBuffersAndAttributes(gl, programInfo, shape);
     twgl.drawBufferInfo(gl, shape);
 
     // sun and moon
@@ -452,19 +467,20 @@ function main() {
     world = m4.translate(m4.scale(m4.identity(), [2, 2, 2]), sunPosition);
     worldInverseTranspose = m4.transpose(m4.inverse(world));
 
-    twgl.setUniforms(flowerProgramInfo, {
+    twgl.setUniforms(programInfo, {
       u_worldInverseTranspose: worldInverseTranspose,
       u_world: world,
-      u_nocolor: 2
+      u_nocolor: 2,
+      u_subdivide: 1.0
     });
 
-    twgl.setBuffersAndAttributes(gl, flowerProgramInfo, shape);
+    twgl.setBuffersAndAttributes(gl, programInfo, shape);
     twgl.drawBufferInfo(gl, shape);
 
     world = m4.translate(m4.scale(m4.identity(), [2, 2, 2]), moonPosition);
     worldInverseTranspose = m4.transpose(m4.inverse(world));
 
-    twgl.setUniforms(flowerProgramInfo, {
+    twgl.setUniforms(programInfo, {
       u_worldInverseTranspose: worldInverseTranspose,
       u_world: world,
     });
@@ -473,7 +489,7 @@ function main() {
 
     // fireflies
 
-    twgl.setUniforms(flowerProgramInfo, {
+    twgl.setUniforms(programInfo, {
       u_nocolor: 1
     });
 
@@ -481,7 +497,7 @@ function main() {
       let world = m4.scale(m4.translate(m4.identity(), [fireflies[i].x, fireflies[i].y, fireflies[i].z]), [0.05, 0.05, 0.05]);
       let worldInverseTranspose = m4.transpose(m4.inverse(world));
 
-      twgl.setUniforms(flowerProgramInfo, {
+      twgl.setUniforms(programInfo, {
         u_worldInverseTranspose: worldInverseTranspose,
         u_world: world,
       });

@@ -16,7 +16,7 @@
   </body>
 </html>
 <!-- vertex shader -->
-<script  id="flower-vs" type="x-shader/x-vertex">
+<script  id="vs" type="x-shader/x-vertex">
   #define MAX_LIGHTS 20
 
   attribute vec4 a_position;
@@ -89,7 +89,7 @@
   }
   </script>
   <!-- fragment shader -->
-  <script  id="flower-fs" type="x-shader/x-fragment">
+  <script  id="fs" type="x-shader/x-fragment">
   precision highp float;
 
   #define MAX_LIGHTS 20
@@ -130,15 +130,22 @@
   uniform vec4 u_fogColor;
   uniform float u_fogNear;
   uniform float u_fogFar;
+  uniform float u_subdivide;
   
   // The texture.
   uniform sampler2D u_texture;
   
   void main() {
-    vec4 color = texture2D(u_texture, v_texcoord);
+    vec2 texcoord = v_texcoord;
+    if(u_subdivide >= 2.0) {
+      texcoord *= u_subdivide;
+      texcoord = fract(texcoord);
+    }
+    
+    vec4 color = texture2D(u_texture, texcoord);
     if(color.a < 0.1) discard;
   
-    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+    vec4 resColor = vec4(0.0, 0.0, 0.0, 1.0);
 
     // because v_normal is a varying it's interpolated
     // so it will not be a unit vector. Normalizing it
@@ -170,10 +177,10 @@
     
       // Lets multiply just the color portion (not the alpha)
       // by the light
-      gl_FragColor.rgb += color.rgb * light * u_lights[i].color * u_lights[i].intensity * attenuation;
+      resColor.rgb += color.rgb * light * u_lights[i].color * u_lights[i].intensity * attenuation;
     
       // Just add in the specular
-      gl_FragColor.rgb += specular * u_lights[i].specularColor * u_lights[i].intensity * attenuation;
+      resColor.rgb += specular * u_lights[i].specularColor * u_lights[i].intensity * attenuation;
     }
 
     if(u_flash) {
@@ -194,22 +201,21 @@
           specular = pow(max(0.0, dot(surfaceToViewDirection, reflectDir)), u_shininess);
         }
         float attenuation = 1.0 / (1.0 + v_distToFlash * 0.09 + v_distToFlash * v_distToFlash * 0.032);
-        gl_FragColor.rgb += color.rgb * light * vec3(1.0, 1.0, 1.0) * intensity;
+        resColor.rgb += color.rgb * light * vec3(1.0, 1.0, 1.0) * intensity;
         // Just add in the specular
-        gl_FragColor.rgb += specular * vec3(1.0, 1.0, 1.0)* intensity;
+        resColor.rgb += specular * vec3(1.0, 1.0, 1.0) * intensity;
       }
     }
 
-    //gl_FragColor.rgb += vec3(vec4(u_ambientColor, 1.0) * 0.1 * color);
+    //resColor.rgb += vec3(vec4(u_ambientColor, 1.0) * 0.1 * color);
     //if(color.a > 0.01) {
     if(u_nocolor > 0) {
-      gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+      resColor = vec4(1.0, 1.0, 1.0, 1.0);
     }
 
     float fogAmount = smoothstep(u_fogNear, u_fogFar, v_fogDepth);
-    gl_FragColor = mix(gl_FragColor, u_fogColor, u_nocolor == 0 ? fogAmount : u_nocolor == 1 ?  0.5 * fogAmount : 0.0);
-
-      
+    resColor = mix(resColor, u_fogColor, u_nocolor == 0 ? fogAmount : u_nocolor == 1 ?  0.5 * fogAmount : 0.0);
+    gl_FragColor = resColor;
     //}
   }
 </script>
