@@ -67,15 +67,11 @@ function main() {
 
     },
     grass: {
-      src: "https://static.wikia.nocookie.net/minecraft-computer/images/0/01/Tall_Grass.png/revision/latest?cb=20130824022039",
+      src: "https://i.imgur.com/kDNA0nv.png",
 
     },
     ground: {
       src: "https://i.imgur.com/LAf0iAz.jpeg",
-
-    },
-    stone: {
-      src: "https://static.wikia.nocookie.net/minecraft_gamepedia/images/d/dc/Stone_%28texture%29_JE5_BE3.png/revision/latest/scale-to-width-down/250?cb=20201001141805",
 
     }
   });
@@ -103,7 +99,8 @@ function main() {
     dayNightCycle: true,
     lightLinear: 1,
     lightQuadratic: 0.7,
-    lightConstant: 2
+    lightConstant: 2,
+    flashlight: false
   };
 
   webglLessonsUI.setupUI(document.querySelector("#ui"), settings, [
@@ -196,6 +193,11 @@ function main() {
       type: "checkbox",
       key: "dayNightCycle",
       value: true
+    },
+    {
+      type: "checkbox",
+      key: "flashlight",
+      value: false
     },
     {
       type: "slider",
@@ -344,6 +346,8 @@ function main() {
     let lights = fireflies.sort((a, b) => a.y - b.y).map(f => {return {position: [f.x, f.y, f.z], color: fireflyColor, specularColor: fireflyColor, type: 1, intensity: 2}});
     lights = [sunLight, ...lights.slice(0, 19)];
 
+    let flashPosition = [cameraPosition[0], cameraPosition[1]-0.5, cameraPosition[2]];
+
     gl.useProgram(flowerProgramInfo.program);
     twgl.setUniforms(flowerProgramInfo, {
       u_lightWorldPosition: sunPosition,
@@ -363,7 +367,10 @@ function main() {
       u_lightLinear: settings.lightLinear,
       u_lightQuadratic: settings.lightQuadratic,
       u_lights: lights,
-      u_lightCount: lights.length
+      u_lightCount: lights.length,
+      u_flash: settings.flashlight,
+      u_flashPosition: flashPosition,
+      u_flashDirection: [target[0] - flashPosition[0], target[1] -0.5 - flashPosition[1], target[2] - flashPosition[2]]
     });
 
     // plants

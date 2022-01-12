@@ -2,7 +2,7 @@
 <html lang='en'>
   <head>
     <meta charset='UTF-8'/>
-    <title>Flower field</title>
+    <title>WebGL forest</title>
     <link rel='stylesheet' href='./styles.css'>
   </head>
   <body>
@@ -39,9 +39,8 @@
   uniform Light u_lights[MAX_LIGHTS];
   uniform int u_lightCount;
 
-  //uniform vec3 u_lightWorldPosition;
-
   uniform vec3 u_viewWorldPosition;
+  uniform highp vec3 u_flashPosition;
   
   varying vec2 v_texcoord;
   varying float v_fogDepth;
@@ -49,6 +48,8 @@
   varying vec3 v_normal;
   varying vec3 v_surfacesToLights[MAX_LIGHTS];
   varying vec3 v_surfaceToView;
+  varying vec3 v_surfaceToFlash;
+  varying float v_distToFlash;
   
   void main() {
     // Multiply the position by the matrix.
@@ -77,6 +78,8 @@
       float lightDist = length(v_surfacesToLights[i]);
       v_distsToLights[i] = lightDist;
     }
+    v_surfaceToFlash = u_flashPosition - surfaceWorldPosition;
+    v_distToFlash = length(v_surfaceToFlash);
   
     // compute the vector of the surface to the view/camera
     // and pass it to the fragment shader
@@ -98,6 +101,8 @@
   varying vec3 v_surfacesToLights[MAX_LIGHTS];
   varying vec3 v_surfaceToView;
   varying float v_distsToLights[MAX_LIGHTS];
+  varying float v_distToFlash;
+  varying vec3 v_surfaceToFlash;
 
   struct Light {
     highp vec3 position;
@@ -117,6 +122,10 @@
   uniform float u_shininess;
   uniform int u_nocolor;
   uniform bool u_blinn;
+
+  uniform highp vec3 u_flashPosition;
+  uniform vec3 u_flashDirection;
+  uniform bool u_flash;
 
   uniform vec4 u_fogColor;
   uniform float u_fogNear;
@@ -167,14 +176,38 @@
       gl_FragColor.rgb += specular * u_lights[i].specularColor * u_lights[i].intensity * attenuation;
     }
 
+    if(u_flash) {
+      vec3 surfaceToFlash = normalize(v_surfaceToFlash);
+      float inner = cos(radians(12.5));
+      float outer = cos(radians(17.5));
+      float theta = dot(surfaceToFlash, normalize(-u_flashDirection));
+      float epsilon   = inner - outer;
+      float intensity = clamp((theta - outer) / epsilon, 0.0, 1.0); 
+      if(theta > outer) {
+        float light = dot(normal, surfaceToFlash);
+        float specular = 0.0;
+        if(u_blinn) {
+          vec3 halfVector = normalize(surfaceToFlash + surfaceToViewDirection);
+          specular = pow(max(0.0, dot(normal, halfVector)), u_shininess);
+        } else {
+          vec3 reflectDir = reflect(-surfaceToFlash, normal);
+          specular = pow(max(0.0, dot(surfaceToViewDirection, reflectDir)), u_shininess);
+        }
+        float attenuation = 1.0 / (1.0 + v_distToFlash * 0.09 + v_distToFlash * v_distToFlash * 0.032);
+        gl_FragColor.rgb += color.rgb * light * vec3(1.0, 1.0, 1.0) * intensity;
+        // Just add in the specular
+        gl_FragColor.rgb += specular * vec3(1.0, 1.0, 1.0)* intensity;
+      }
+    }
+
     //gl_FragColor.rgb += vec3(vec4(u_ambientColor, 1.0) * 0.1 * color);
     //if(color.a > 0.01) {
     if(u_nocolor > 0) {
       gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
     }
 
-      float fogAmount = smoothstep(u_fogNear, u_fogFar, v_fogDepth);
-      gl_FragColor = mix(gl_FragColor, u_fogColor, u_nocolor == 0 ? fogAmount : u_nocolor == 1 ?  0.5 * fogAmount : 0.0);
+    float fogAmount = smoothstep(u_fogNear, u_fogFar, v_fogDepth);
+    gl_FragColor = mix(gl_FragColor, u_fogColor, u_nocolor == 0 ? fogAmount : u_nocolor == 1 ?  0.5 * fogAmount : 0.0);
 
       
     //}
