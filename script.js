@@ -66,6 +66,10 @@ function main() {
   let trees = [];
   let fireflies = [];
   let plantTypes = 6;
+  let treeGrid = 7;
+  let plantGrid = 2;
+  let treeDensity = 6;
+  let plantDensity = 2;
 
   const textures = twgl.createTextures(gl, {
     plants: {
@@ -91,7 +95,7 @@ function main() {
 
   let settings = {
     fogNear: 0,
-    fogFar: 25.0,
+    fogFar: 1,
     fieldSize: 25,
     objectCount: 40,
     fireflyCount: 50,
@@ -138,7 +142,7 @@ function main() {
       type: "slider",
       key: "fogFar",
       min: 0,
-      max: 80,
+      max: 3,
       precision: 3,
       step: 0.001,
     },
@@ -295,14 +299,42 @@ function main() {
     twgl.resizeCanvasToDisplaySize(gl.canvas);
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
 
+    const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+    m4.perspective(fieldOfViewRadians, aspect, 1, 2000, projection);
+
+    let playerPosition = [0 + cameraTranslate[0], 2.5 + cameraTranslate[1], 0 + cameraTranslate[2]];
+    let cameraPosition = playerPosition;
+    let up = [0, 1, 0];
+    let target = [Math.cos(mouseNormX * Math.PI * 2) + playerPosition[0], 4 - 4 * mouseNormY, Math.sin(mouseNormX * Math.PI * 2) + playerPosition[2]];
+    if (settings.camera == 1) {
+      target = sunPosition[1] <= 0 ? moonPosition : sunPosition;
+    } else if (settings.camera == 2) {
+      target = [playerPosition[0], playerPosition[1], playerPosition[2]];
+      if (sunPosition[1] <= 0)
+        cameraPosition = [moonPosition[0], moonPosition[1] - 5, moonPosition[2]];
+      else cameraPosition = [sunPosition[0], sunPosition[1] - 5, sunPosition[2]];
+    }
+
+    // Compute the camera's matrix using look at.
+    const camera = m4.lookAt(cameraPosition, target, up);
+    m4.inverse(camera, view);
+
+    const treeAnchor = [Math.floor(playerPosition[0] / treeGrid) * treeGrid, Math.floor(playerPosition[1] / treeGrid) * treeGrid, Math.floor(playerPosition[2] / treeGrid) * treeGrid];
+    const plantAnchor = [Math.floor(playerPosition[0] / plantGrid) * plantGrid, Math.floor(playerPosition[1] / plantGrid) * plantGrid, Math.floor(playerPosition[2] / plantGrid) * plantGrid];
+    let treeOffset = Math.floor(settings.fieldSize / treeGrid) * treeGrid;
+    //if(treeOffset % 2 != 0) treeOffset++;
+    let plantOffset = Math.floor(settings.fieldSize / plantGrid) * plantGrid;
+    //if(plantOffset % 2 != 0) plantOffset++;
+
     gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     if(settings.dayNightCycle) {
       let dayTime = time*0.2;
       bgColor = interp(fogColor, [0.02, 0.05, 0.08, 1], Math.sin(dayTime) / 2 + 0.5);
-      sunPosition = [Math.cos(dayTime) * settings.fieldSize, Math.sin(dayTime) * settings.fieldSize, 0];
-      moonPosition = [Math.cos(dayTime + Math.PI) * settings.fieldSize, Math.sin(dayTime + Math.PI) * settings.fieldSize, 0];
+      let rad = settings.fieldSize * 1.5;
+      sunPosition = [playerPosition[0], Math.sin(dayTime) * rad, Math.cos(dayTime) * rad + playerPosition[2]];
+      moonPosition = [playerPosition[0], Math.sin(dayTime + Math.PI) * rad, Math.cos(dayTime + Math.PI) * rad + playerPosition[2]];
       sunColor = interp(sunColor, moonColor, Math.sin(dayTime) / 2 + 0.5);
       sunIntensity = interp([1.0], [0.01], Math.sin(dayTime) / 2 + 0.5);
       fogDistance = interp([settings.fogFar], [settings.fogFar * 1.3], Math.sin(dayTime) / 2 + 0.5);
@@ -312,25 +344,7 @@ function main() {
 
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
-    m4.perspective(fieldOfViewRadians, aspect, 1, 2000, projection);
-
-    let cameraPosition = [0 + cameraTranslate[0], 2.5 + cameraTranslate[1], 0 + cameraTranslate[2]];
-    let up = [0, 1, 0];
-    let target = [Math.cos(mouseNormX * Math.PI * 2) + cameraPosition[0], 4 - 4 * mouseNormY, Math.sin(mouseNormX * Math.PI * 2) + cameraPosition[2]];
-    if (settings.camera == 1) {
-      cameraPosition = [0, 1.5, 0];
-      target = sunPosition[1] <= 0 ? moonPosition : sunPosition;
-    } else if (settings.camera == 2) {
-      if (sunPosition[1] <= 0)
-        cameraPosition = [moonPosition[0], moonPosition[1] + 5, moonPosition[2]];
-      else cameraPosition = [sunPosition[0], sunPosition[1] + 5, sunPosition[2]];
-      target = [0, 2, 0];
-    }
-
-    // Compute the camera's matrix using look at.
-    const camera = m4.lookAt(cameraPosition, target, up);
-    m4.inverse(camera, view);
+    
 
     let sunLight = {
       position: sunPosition,
@@ -340,25 +354,24 @@ function main() {
       intensity: sunIntensity[0]
     }
 
-    
     for(let i = 0; i < settings.fireflyCount; i++) {
       let scale = 0.5;
       let a = noise.perlin3(fireflies[i].x * scale, fireflies[i].y * scale, time * 0.1) * Math.PI;
       let a2 = noise.perlin3(fireflies[i].x * scale, fireflies[i].y * scale, time * 0.1+100) * Math.PI;
-      if(Math.abs(fireflies[i].x) > settings.fieldSize || Math.abs(fireflies[i].z) > settings.fieldSize) {
-        fireflies[i].x = rand(-settings.fieldSize, settings.fieldSize);
+      if(dis([fireflies[i].x, fireflies[i].y, fireflies[i].z], playerPosition) > settings.fieldSize * settings.fieldSize) {
+        fireflies[i].x = rand(-settings.fieldSize, settings.fieldSize) + playerPosition[0];
         fireflies[i].y = rand(0.5, 1.5);
-        fireflies[i].z = rand(-settings.fieldSize, settings.fieldSize);
+        fireflies[i].z = rand(-settings.fieldSize, settings.fieldSize) + playerPosition[2];
       }
       fireflies[i].x += Math.cos(a) * fireflies[i].speed;
       fireflies[i].z += Math.sin(a) * fireflies[i].speed;
       fireflies[i].y += Math.cos(a2) * fireflies[i].speed / 10;
     }
 
-    let lights = fireflies.sort((a, b) => dis([a.x, a.y, a.z], cameraPosition) - dis([b.x, b.y, b.z], cameraPosition)).map(f => {return {position: [f.x, f.y, f.z], color: fireflyColor, specularColor: fireflyColor, type: 1, intensity: 2}});
+    let lights = fireflies.sort((a, b) => dis([a.x, a.y, a.z], playerPosition) - dis([b.x, b.y, b.z], playerPosition)).map(f => {return {position: [f.x, f.y, f.z], color: fireflyColor, specularColor: fireflyColor, type: 1, intensity: 2}});
     lights = [sunLight, ...lights.slice(0, 19)];
 
-    let flashPosition = [cameraPosition[0], cameraPosition[1]-0.5, cameraPosition[2]];
+    let flashPosition = [playerPosition[0], playerPosition[1]-0.5, playerPosition[2]];
 
     gl.useProgram(programInfo.program);
     twgl.setUniforms(programInfo, {
@@ -367,7 +380,7 @@ function main() {
       u_view: view,
       u_fogColor: bgColor,
       u_fogNear: settings.fogNear,
-      u_fogFar: fogDistance,
+      u_fogFar: settings.fieldSize * settings.fogFar,
       u_viewWorldPosition: cameraPosition,
       u_nocolor: 0,
       u_blinn: settings.blinn,
@@ -388,7 +401,50 @@ function main() {
     // plants
     let shape = shapes[1];
     twgl.setBuffersAndAttributes(gl, programInfo, shape);
-    for (let i = 0; i < plantCount; i++) {
+
+    for(let i = plantAnchor[0] - plantOffset; i <= plantAnchor[0] + plantOffset; i+=plantGrid)
+      for(let j = plantAnchor[2] - plantOffset; j <= plantAnchor[2] + plantOffset; j+=plantGrid) {
+        let scale = 0.6;
+        let a = noise.perlin3(i * scale, j * scale, time * 0.7) * Math.PI * 0.1;
+        let a2 = noise.perlin2(i * scale, j * scale) * Math.PI * (Math.abs(noise.perlin2(i * scale + 100, j * scale + 100)) + 1);
+        //let off1 = 0, off2 = 0;
+        let off1 = Math.cos(a), off2 = Math.sin(a);
+        let off3 = Math.cos(a2), off4 = Math.sin(a2);
+        let pos = [i - off2 + off3, 0.5, j + off1 + off4]
+        let world = m4.translate(m4.identity(), pos);
+        let w = noise.perlin2(i * scale, j * scale) + 2;
+        world = m4.translate(world, [0, w/3, 0]);
+        world = m4.scale(world, [w, w, w]);
+        world = m4.rotateX(world, Math.PI / 5.5 + off1);
+        world = m4.rotateY(world, off2);
+        //let ang = Math.atan2( target[2] - playerPosition[2], target[0] - playerPosition[0] );
+        //world = m4.rotateZ(world, ang + Math.PI / 2);
+        //world = m4.rotateZ(world, plants[i].rotate);
+        let worldInverseTranspose = m4.transpose(m4.inverse(world));
+
+        twgl.setUniforms(programInfo, {
+          u_worldInverseTranspose: worldInverseTranspose,
+          u_world: world,
+          u_texture: twoDTextures[0],
+        });
+        let xoff = 1.0 / plantTypes;
+        let xcoord = Math.floor((noise.perlin2(i * scale, j * scale) * 0.5 + 0.5) * (plantTypes + 0.9))*xoff;
+        twgl.setAttribInfoBufferFromArray(gl, shape.attribs.a_texcoord, new Float32Array([xcoord, 0, xcoord+xoff, 0, xcoord, 1, xcoord+xoff, 1]));
+
+        twgl.drawBufferInfo(gl, shape);
+        world = m4.rotateZ(world, Math.PI / 2);
+        worldInverseTranspose = m4.transpose(m4.inverse(world));
+
+        twgl.setUniforms(programInfo, {
+          u_worldInverseTranspose: worldInverseTranspose,
+          u_world: world
+        });
+        
+        twgl.drawBufferInfo(gl, shape);
+      }
+
+
+    /*for (let i = 0; i < plantCount; i++) {
       let scale = 0.1;
       let a = noise.perlin3(plants[i].x * scale, plants[i].z * scale, time * 0.7) * Math.PI * 0.1;
       //let off1 = 0, off2 = 0;
@@ -399,7 +455,7 @@ function main() {
       world = m4.scale(world, [plants[i].w, plants[i].w, plants[i].w]);
       world = m4.rotateX(world, Math.PI / 5.5 + off1);
       world = m4.rotateY(world, off2);
-      let ang = Math.atan2( target[2] - cameraPosition[2], target[0] - cameraPosition[0] );
+      let ang = Math.atan2( target[2] - playerPosition[2], target[0] - playerPosition[0] );
       //world = m4.rotateZ(world, ang + Math.PI / 2);
       //world = m4.rotateZ(world, plants[i].rotate);
       let worldInverseTranspose = m4.transpose(m4.inverse(world));
@@ -423,7 +479,7 @@ function main() {
       });
       
       twgl.drawBufferInfo(gl, shape);
-    }
+    }*/
 
     
 
@@ -434,7 +490,7 @@ function main() {
       u_texture: textures.bark,
     });
     
-    for (let i = 0; i < treeCount; i++) {
+    /*for (let i = 0; i < treeCount; i++) {
       
       let pos = [trees[i].x, trees[i].y, trees[i].z];
       let world = m4.scale(m4.translate(m4.identity(), pos), [trees[i].w, 1, trees[i].w]);
@@ -448,7 +504,28 @@ function main() {
       shape = shapes[trees[i].shape];
       twgl.setBuffersAndAttributes(gl, programInfo, shape);
       twgl.drawBufferInfo(gl, shape);
-    }
+    }*/
+
+
+    for(let i = treeAnchor[0] - treeOffset; i <= treeAnchor[0] + treeOffset; i+=treeGrid)
+      for(let j = treeAnchor[2] - treeOffset; j <= treeAnchor[2] + treeOffset; j+=treeGrid) {
+        let scale = 0.6;
+        let a2 = noise.perlin2(i * scale, j * scale) * Math.PI * (Math.abs(noise.perlin2(i * scale + 100, j * scale + 100)) + 1);
+        let off3 = Math.cos(a2) * 5, off4 = Math.sin(a2) * 5;
+        let pos = [i + off3, 25, j + off4];
+        let w = noise.perlin2(i * scale + 200, j * scale + 200) * 0.5 + 1.5;
+        let world = m4.scale(m4.translate(m4.identity(), pos), [w, 1, w]);
+        let worldInverseTranspose = m4.transpose(m4.inverse(world));
+
+        twgl.setUniforms(programInfo, {
+          u_worldInverseTranspose: worldInverseTranspose,
+          u_world: world,
+        });
+  
+        shape = shapes[Math.floor((noise.perlin2(i * scale, j * scale) * 0.5 + 0.5) * (1.9))+2];
+        twgl.setBuffersAndAttributes(gl, programInfo, shape);
+        twgl.drawBufferInfo(gl, shape);
+      }
 
     // ground
 
@@ -465,8 +542,9 @@ function main() {
     twgl.setBuffersAndAttributes(gl, programInfo, shape);
 
     let groundScale = 5;
-    for(let i = -settings.fieldSize; i <= settings.fieldSize; i+=groundScale)
-      for(let j = -settings.fieldSize; j <= settings.fieldSize; j+=groundScale) {
+    let groundAnchor = [Math.floor(playerPosition[0] / groundScale) * groundScale, 0, Math.floor(playerPosition[2] / groundScale) * groundScale]
+    for(let i = -settings.fieldSize + groundAnchor[0] - groundScale; i <= settings.fieldSize+ groundAnchor[0] + groundScale; i+=groundScale)
+      for(let j = -settings.fieldSize+ groundAnchor[2] - groundScale; j <= settings.fieldSize+ groundAnchor[2] + groundScale; j+=groundScale) {
         let world = m4.translate(m4.identity(), [i, 0, j]);
         world = m4.scale(world, [groundScale, groundScale, groundScale]);
         let worldInverseTranspose = m4.transpose(m4.inverse(world));
@@ -481,7 +559,7 @@ function main() {
     // sun and moon
 
     shape = shapes[0];
-    let world = m4.translate(m4.scale(m4.identity(), [2, 2, 2]), sunPosition);
+    let world = m4.scale(m4.translate(m4.identity(), sunPosition), [2, 2, 2]);
     let worldInverseTranspose = m4.transpose(m4.inverse(world));
 
     twgl.setUniforms(programInfo, {
@@ -494,7 +572,7 @@ function main() {
     twgl.setBuffersAndAttributes(gl, programInfo, shape);
     twgl.drawBufferInfo(gl, shape);
 
-    world = m4.translate(m4.scale(m4.identity(), [2, 2, 2]), moonPosition);
+    world = m4.scale(m4.translate(m4.identity(), moonPosition), [2, 2, 2]);
     worldInverseTranspose = m4.transpose(m4.inverse(world));
 
     twgl.setUniforms(programInfo, {
