@@ -95,17 +95,17 @@ function main() {
 
   let settings = {
     fogNear: 0,
-    fogFar: 1,
-    fieldSize: 25,
+    fogFar: 1.25,
+    fieldSize: 15,
     objectCount: 40,
     fireflyCount: 50,
     fireflyIntensity: 2,
     sunIntensity: 1,
     camera: 0,
     blinn: false,
-    stoneShininess: 30,
+    stoneShininess: 4,
     plantShininess: 10,
-    groundShininess: 70,
+    groundShininess: 7,
     dayNightCycle: true,
     lightLinear: 1,
     lightQuadratic: 0.7,
@@ -330,9 +330,9 @@ function main() {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     if(settings.dayNightCycle) {
-      let dayTime = time*0.2;
+      let dayTime = time*0.2;// + Math.PI;
       bgColor = interp(fogColor, [0.02, 0.05, 0.08, 1], Math.sin(dayTime) / 2 + 0.5);
-      let rad = settings.fieldSize * 1.5;
+      let rad = 50;
       sunPosition = [playerPosition[0], Math.sin(dayTime) * rad, Math.cos(dayTime) * rad + playerPosition[2]];
       moonPosition = [playerPosition[0], Math.sin(dayTime + Math.PI) * rad, Math.cos(dayTime + Math.PI) * rad + playerPosition[2]];
       sunColor = interp(sunColor, moonColor, Math.sin(dayTime) / 2 + 0.5);
@@ -371,7 +371,7 @@ function main() {
     let lights = fireflies.sort((a, b) => dis([a.x, a.y, a.z], playerPosition) - dis([b.x, b.y, b.z], playerPosition)).map(f => {return {position: [f.x, f.y, f.z], color: fireflyColor, specularColor: fireflyColor, type: 1, intensity: 2}});
     lights = [sunLight, ...lights.slice(0, 19)];
 
-    let flashPosition = [playerPosition[0], playerPosition[1]-0.5, playerPosition[2]];
+    let flashPosition = [playerPosition[0], playerPosition[1], playerPosition[2]];
 
     gl.useProgram(programInfo.program);
     twgl.setUniforms(programInfo, {
@@ -486,7 +486,7 @@ function main() {
     // trees
 
     twgl.setUniforms(programInfo, {
-      u_shininess: 1,
+      u_shininess: settings.stoneShininess,
       u_texture: textures.bark,
     });
     
