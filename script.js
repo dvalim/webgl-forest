@@ -14,7 +14,7 @@ function main() {
     mousedown = false;
   })
   canvas.addEventListener("mousemove", e => {
-    if (!mousedown) return;
+    //if (!mousedown) return;
     mouseNormX = e.offsetX / canvas.width;
     mouseNormY = e.offsetY / canvas.height;
   })
@@ -68,8 +68,6 @@ function main() {
   let plantTypes = 6;
   let treeGrid = 7;
   let plantGrid = 2;
-  let treeDensity = 6;
-  let plantDensity = 2;
 
   const textures = twgl.createTextures(gl, {
     plants: {
@@ -287,14 +285,6 @@ function main() {
     const fps = 1 / deltaTime; // compute frames per second
     fpsElem.textContent = fps.toFixed(1); // update fps display
 
-    const movementSpeed = 0.1;
-    if(keys['KeyW']) cameraTranslate = [cameraTranslate[0], cameraTranslate[1], cameraTranslate[2]-movementSpeed];
-    if(keys['KeyS']) cameraTranslate = [cameraTranslate[0], cameraTranslate[1], cameraTranslate[2]+movementSpeed];
-    if(keys['KeyA']) cameraTranslate = [cameraTranslate[0]-movementSpeed, cameraTranslate[1], cameraTranslate[2]];
-    if(keys['KeyD']) cameraTranslate = [cameraTranslate[0]+movementSpeed, cameraTranslate[1], cameraTranslate[2]];
-    if(keys['KeyZ']) cameraTranslate = [cameraTranslate[0], cameraTranslate[1]-movementSpeed, cameraTranslate[2]];
-    if(keys['KeyX']) cameraTranslate = [cameraTranslate[0], cameraTranslate[1]+movementSpeed, cameraTranslate[2]];
-
 
     twgl.resizeCanvasToDisplaySize(gl.canvas);
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
@@ -302,7 +292,7 @@ function main() {
     const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
     m4.perspective(fieldOfViewRadians, aspect, 1, 2000, projection);
 
-    let playerPosition = [0 + cameraTranslate[0], 2.5 + cameraTranslate[1], 0 + cameraTranslate[2]];
+    let playerPosition = [cameraTranslate[0], 2.5 + cameraTranslate[1], cameraTranslate[2]];
     let cameraPosition = playerPosition;
     let up = [0, 1, 0];
     let target = [Math.cos(mouseNormX * Math.PI * 2) + playerPosition[0], 4 - 4 * mouseNormY, Math.sin(mouseNormX * Math.PI * 2) + playerPosition[2]];
@@ -310,9 +300,18 @@ function main() {
       target = sunPosition[1] <= 0 ? moonPosition : sunPosition;
     } else if (settings.camera == 2) {
       target = [playerPosition[0], playerPosition[1], playerPosition[2]];
-      if (sunPosition[1] <= 0)
-        cameraPosition = [moonPosition[0], moonPosition[1] - 5, moonPosition[2]];
-      else cameraPosition = [sunPosition[0], sunPosition[1] - 5, sunPosition[2]];
+      let objPosition = sunPosition;
+      if(sunPosition[1] <= 0) objPosition = moonPosition;
+      cameraPosition = [(objPosition[0]-playerPosition[0])*0.4+playerPosition[0], (objPosition[1]-playerPosition[1])*0.4+playerPosition[1],(objPosition[2]-playerPosition[2])*0.4+playerPosition[2]];
+    }
+
+    if(settings.camera == 0) {
+      const movementSpeed = 0.15;
+      let forward = [target[0]-cameraPosition[0], target[1]-cameraPosition[1], target[2]-cameraPosition[2]]; 
+      if(keys['KeyW']) cameraTranslate = [cameraTranslate[0]+forward[0]*movementSpeed, cameraTranslate[1], cameraTranslate[2]+forward[2]*movementSpeed];
+      if(keys['KeyS']) cameraTranslate = [cameraTranslate[0]-forward[0]*movementSpeed, cameraTranslate[1], cameraTranslate[2]-forward[2]*movementSpeed];
+      if(keys['KeyZ']) cameraTranslate = [cameraTranslate[0], cameraTranslate[1]-movementSpeed, cameraTranslate[2]];
+      if(keys['KeyX']) cameraTranslate = [cameraTranslate[0], cameraTranslate[1]+movementSpeed, cameraTranslate[2]];
     }
 
     // Compute the camera's matrix using look at.
@@ -343,8 +342,6 @@ function main() {
     gl.clearColor(...bgColor);
 
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-    
 
     let sunLight = {
       position: sunPosition,
@@ -394,7 +391,7 @@ function main() {
       u_lightCount: lights.length,
       u_flash: settings.flashlight,
       u_flashPosition: flashPosition,
-      u_flashDirection: [target[0] - flashPosition[0], target[1] -0.5 - flashPosition[1], target[2] - flashPosition[2]],
+      u_flashDirection: [target[0] - flashPosition[0], target[1] - flashPosition[1], target[2] - flashPosition[2]],
       u_ambient: 0
     });
 

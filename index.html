@@ -185,7 +185,6 @@
       resColor.rgb += specular * u_lights[i].specularColor * u_lights[i].intensity * attenuation;
 
       resColor.rgb += u_ambient * color.rgb * u_lights[i].color * attenuation;
-
     }
 
     if(u_flash) {
@@ -218,8 +217,8 @@
     }
 
     float fogAmount = smoothstep(u_fogNear, u_fogFar, v_fogDepth);
-    resColor = mix(resColor, u_fogColor, u_nocolor == 0 ? fogAmount : u_nocolor == 1 ?  0.75 * fogAmount : 0.0);
-    gl_FragColor = clamp(resColor, 0.0, 1.0);
+    resColor = mix(resColor, u_fogColor, u_nocolor == 0 ? fogAmount : u_nocolor == 1 ?  0.5*fogAmount : 0.0);
+    gl_FragColor = resColor;
     //}
   }
 </script>
