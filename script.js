@@ -66,8 +66,6 @@ function main() {
   let trees = [];
   let fireflies = [];
   let plantTypes = 6;
-  let treeGrid = 7;
-  let plantGrid = 2;
 
   const textures = twgl.createTextures(gl, {
     plants: {
@@ -108,34 +106,12 @@ function main() {
     lightLinear: 1,
     lightQuadratic: 0.7,
     lightConstant: 2,
-    flashlight: false
+    flashlight: false,
+    treeGrid: 7,
+    plantGrid: 2
   };
 
   webglLessonsUI.setupUI(document.querySelector("#ui"), settings, [
-    {
-      type: "slider",
-      key: "lightConstant",
-      min: 0,
-      max: 2,
-      precision: 5,
-      step: 0.0001,
-    },
-    {
-      type: "slider",
-      key: "lightLinear",
-      min: 0,
-      max: 4,
-      precision: 5,
-      step: 0.0001,
-    },
-    {
-      type: "slider",
-      key: "lightQuadratic",
-      min: 0,
-      max: 4,
-      precision: 5,
-      step: 0.0001,
-    },
     {
       type: "slider",
       key: "fogFar",
@@ -162,25 +138,17 @@ function main() {
     },
     {
       type: "slider",
-      key: "fireflyIntensity",
-      min: 0,
-      max: 20,
-      precision: 3,
-      step: 0.01,
-    },
-    {
-      type: "slider",
-      key: "sunIntensity",
-      min: 0,
-      max: 2,
-      precision: 3,
-      step: 0.01,
-    },
-    {
-      type: "slider",
-      key: "objectCount",
+      key: "treeGrid",
       min: 1,
-      max: 100,
+      max: 10,
+      precision: 0,
+      step: 1,
+    },
+    {
+      type: "slider",
+      key: "plantGrid",
+      min: 1,
+      max: 10,
       precision: 0,
       step: 1,
     },
@@ -206,31 +174,7 @@ function main() {
       type: "checkbox",
       key: "flashlight",
       value: false
-    },
-    {
-      type: "slider",
-      key: "plantShininess",
-      min: 0.1,
-      max: 100,
-      precision: 3,
-      step: 0.1,
-    },
-    {
-      type: "slider",
-      key: "stoneShininess",
-      min: 0.1,
-      max: 100,
-      precision: 3,
-      step: 0.1,
-    },
-    {
-      type: "slider",
-      key: "groundShininess",
-      min: 0.1,
-      max: 100,
-      precision: 3,
-      step: 0.1,
-    },
+    }
   ]);
 
   let plantCount = settings.objectCount * settings.objectCount / 4;
@@ -317,7 +261,8 @@ function main() {
     // Compute the camera's matrix using look at.
     const camera = m4.lookAt(cameraPosition, target, up);
     m4.inverse(camera, view);
-
+    let treeGrid = settings.treeGrid;
+    let plantGrid = settings.plantGrid;
     const treeAnchor = [Math.floor(playerPosition[0] / treeGrid) * treeGrid, Math.floor(playerPosition[1] / treeGrid) * treeGrid, Math.floor(playerPosition[2] / treeGrid) * treeGrid];
     const plantAnchor = [Math.floor(playerPosition[0] / plantGrid) * plantGrid, Math.floor(playerPosition[1] / plantGrid) * plantGrid, Math.floor(playerPosition[2] / plantGrid) * plantGrid];
     let treeOffset = Math.floor(settings.fieldSize / treeGrid) * treeGrid;
