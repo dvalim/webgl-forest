@@ -13,3 +13,6 @@ canvas {
     top: 5px;
     color: #fff;
 }
+#uiContainer {
+  top: 50%;
+}

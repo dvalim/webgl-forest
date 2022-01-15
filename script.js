@@ -239,7 +239,7 @@ function main() {
     let playerPosition = [cameraTranslate[0], 2.5 + cameraTranslate[1], cameraTranslate[2]];
     let cameraPosition = playerPosition;
     let up = [0, 1, 0];
-    let target = [Math.cos(mouseNormX * Math.PI * 2) + playerPosition[0], 4 - 4 * mouseNormY, Math.sin(mouseNormX * Math.PI * 2) + playerPosition[2]];
+    let target = [Math.cos(mouseNormX * Math.PI * 2) + playerPosition[0], 4*(0.5 - mouseNormY) + playerPosition[1], Math.sin(mouseNormX * Math.PI * 2) + playerPosition[2]];
     if (settings.camera == 1) {
       target = sunPosition[1] <= 0 ? moonPosition : sunPosition;
     } else if (settings.camera == 2) {
@@ -346,34 +346,46 @@ function main() {
 
     for(let i = plantAnchor[0] - plantOffset; i <= plantAnchor[0] + plantOffset; i+=plantGrid)
       for(let j = plantAnchor[2] - plantOffset; j <= plantAnchor[2] + plantOffset; j+=plantGrid) {
-        let scale = 0.6;
-        let a = noise.perlin3(i * scale, j * scale, time * 0.7) * Math.PI * 0.1;
+        let scale = 0.3;
+        let a = noise.perlin3(i * scale, j * scale, time * 0.7) * Math.PI ;
         let a2 = noise.perlin2(i * scale, j * scale) * Math.PI * (Math.abs(noise.perlin2(i * scale + 100, j * scale + 100)) + 1);
         //let off1 = 0, off2 = 0;
-        let off1 = Math.cos(a), off2 = Math.sin(a);
+        let off1 = Math.cos(a) * 0.1, off2 = Math.sin(a) * 0.1;
         let off3 = Math.cos(a2), off4 = Math.sin(a2);
         let pos = [i - off2 + off3, 0.5, j + off1 + off4]
         let world = m4.translate(m4.identity(), pos);
         let w = noise.perlin2(i * scale, j * scale) + 2;
         world = m4.translate(world, [0, w/3, 0]);
         world = m4.scale(world, [w, w, w]);
-        world = m4.rotateX(world, Math.PI / 5.5 + off1);
+        world = m4.rotateX(world, Math.PI / 2 + off1);
         world = m4.rotateY(world, off2);
         //let ang = Math.atan2( target[2] - playerPosition[2], target[0] - playerPosition[0] );
         //world = m4.rotateZ(world, ang + Math.PI / 2);
         //world = m4.rotateZ(world, plants[i].rotate);
         let worldInverseTranspose = m4.transpose(m4.inverse(world));
 
+        let xoff = 1.0 / (plantTypes+1);
+        let xcoord = Math.floor((noise.perlin2(i * 0.6, j * 0.6) * 0.5 + 0.5) * (plantTypes + 0.5))*xoff;
+       
+        let horizontal = noise.perlin2(i * scale, j * scale) * 0.5 + 0.5;
+        let horizontalChance = 0.4;
+        if(horizontal < horizontalChance) {
+          xcoord = plantTypes*xoff;
+          world = m4.rotateX(world, Math.PI / 2);
+          world = m4.translate(world, [0, 0.5, 0]);
+        }
+
+        twgl.setAttribInfoBufferFromArray(gl, shape.attribs.a_texcoord, new Float32Array([xcoord, 0, xcoord+xoff, 0, xcoord, 1, xcoord+xoff, 1]));
         twgl.setUniforms(programInfo, {
           u_worldInverseTranspose: worldInverseTranspose,
           u_world: world,
           u_texture: twoDTextures[0],
         });
-        let xoff = 1.0 / plantTypes;
-        let xcoord = Math.floor((noise.perlin2(i * scale, j * scale) * 0.5 + 0.5) * (plantTypes + 0.9))*xoff;
-        twgl.setAttribInfoBufferFromArray(gl, shape.attribs.a_texcoord, new Float32Array([xcoord, 0, xcoord+xoff, 0, xcoord, 1, xcoord+xoff, 1]));
 
         twgl.drawBufferInfo(gl, shape);
+
+        if(horizontal < horizontalChance) continue;
+
         world = m4.rotateZ(world, Math.PI / 2);
         worldInverseTranspose = m4.transpose(m4.inverse(world));
 
