@@ -156,7 +156,7 @@ function main() {
       type: "slider",
       key: "camera",
       min: 0,
-      max: 2,
+      max: 3,
       precision: 0,
       step: 1,
     },
@@ -240,20 +240,32 @@ function main() {
     let cameraPosition = playerPosition;
     let up = [0, 1, 0];
     let target = [Math.cos(mouseNormX * Math.PI * 2) + playerPosition[0], 4*(0.5 - mouseNormY) + playerPosition[1], Math.sin(mouseNormX * Math.PI * 2) + playerPosition[2]];
-    if (settings.camera == 1) {
+    if(settings.camera == 1) {
+      cameraPosition = [cameraPosition[0]+5, cameraPosition[1]+7, cameraPosition[2]];
+      target = playerPosition;
+    }
+    else if (settings.camera == 2) {
       target = sunPosition[1] <= 0 ? moonPosition : sunPosition;
-    } else if (settings.camera == 2) {
+    } else if (settings.camera == 3) {
       target = [playerPosition[0], playerPosition[1], playerPosition[2]];
       let objPosition = sunPosition;
       if(sunPosition[1] <= 0) objPosition = moonPosition;
       cameraPosition = [(objPosition[0]-playerPosition[0])*0.4+playerPosition[0], (objPosition[1]-playerPosition[1])*0.4+playerPosition[1],(objPosition[2]-playerPosition[2])*0.4+playerPosition[2]];
     }
 
+    const movementSpeed = 0.15;
     if(settings.camera == 0) {
-      const movementSpeed = 0.15;
       let forward = [target[0]-cameraPosition[0], target[1]-cameraPosition[1], target[2]-cameraPosition[2]]; 
       if(keys['KeyW']) cameraTranslate = [cameraTranslate[0]+forward[0]*movementSpeed, cameraTranslate[1], cameraTranslate[2]+forward[2]*movementSpeed];
       if(keys['KeyS']) cameraTranslate = [cameraTranslate[0]-forward[0]*movementSpeed, cameraTranslate[1], cameraTranslate[2]-forward[2]*movementSpeed];
+      if(keys['KeyZ']) cameraTranslate = [cameraTranslate[0], cameraTranslate[1]-movementSpeed, cameraTranslate[2]];
+      if(keys['KeyX']) cameraTranslate = [cameraTranslate[0], cameraTranslate[1]+movementSpeed, cameraTranslate[2]];
+    }
+    else if(settings.camera == 1) {
+      if(keys['KeyD']) cameraTranslate = [cameraTranslate[0], cameraTranslate[1], cameraTranslate[2]-movementSpeed];
+      if(keys['KeyW']) cameraTranslate = [cameraTranslate[0]-movementSpeed, cameraTranslate[1], cameraTranslate[2]];
+      if(keys['KeyS']) cameraTranslate = [cameraTranslate[0]+movementSpeed, cameraTranslate[1], cameraTranslate[2]];
+      if(keys['KeyA']) cameraTranslate = [cameraTranslate[0], cameraTranslate[1], cameraTranslate[2]+movementSpeed];
       if(keys['KeyZ']) cameraTranslate = [cameraTranslate[0], cameraTranslate[1]-movementSpeed, cameraTranslate[2]];
       if(keys['KeyX']) cameraTranslate = [cameraTranslate[0], cameraTranslate[1]+movementSpeed, cameraTranslate[2]];
     }
