@@ -3,10 +3,25 @@ import * as twgl from './twgl-full.module.js'
 "use strict";
 
 function main() {
+  function interp(arr1, arr2, step) {
+    return arr1.map((el, id) => el * step + arr2[id] * (1 - step));
+  }
+  
+  function rand(min, max) {
+    if (max === undefined) {
+      max = min;
+      min = 0;
+    }
+    return min + Math.random() * (max - min);
+  }
+
+  function dis(v1, v2) {
+    return v1.map((el, id) => (el - v2[id])*(el - v2[id])).reduce((a, b) => a + b);
+  }
+
   twgl.setDefaults({
     attribPrefix: "a_"
   });
-  let mousedown = false;
   canvas.addEventListener("mousedown", e => {
     mousedown = true;
   })
@@ -14,7 +29,6 @@ function main() {
     mousedown = false;
   })
   canvas.addEventListener("mousemove", e => {
-    //if (!mousedown) return;
     mouseNormX = e.offsetX / canvas.width;
     mouseNormY = e.offsetY / canvas.height;
   })
@@ -36,14 +50,6 @@ function main() {
     twgl.primitives.createCylinderBufferInfo(gl, 0.5, 50, 5, 2),
     twgl.primitives.createCylinderBufferInfo(gl, 0.5, 50, 12, 2),
   ];
-
-  function rand(min, max) {
-    if (max === undefined) {
-      max = min;
-      min = 0;
-    }
-    return min + Math.random() * (max - min);
-  }
 
   // Shared values
   const projection = m4.identity();
@@ -177,30 +183,6 @@ function main() {
     }
   ]);
 
-  let plantCount = settings.objectCount * settings.objectCount / 4;
-  let treeCount = settings.objectCount * 1.5;
-
-  for(let i = 0; i < plantCount; i++) {
-    plants = [...plants, {
-      x: rand(-settings.fieldSize, settings.fieldSize),
-      y: 0,
-      z: rand(-settings.fieldSize, settings.fieldSize),
-      type: Math.floor(rand(0, plantTypes)),
-      rotate: rand(0, 2*Math.PI),
-      w: rand(2, 3)
-    }]
-  }
-
-  for(let i = 0; i < treeCount; i++) {
-    trees = [...trees, {
-      x: rand(-settings.fieldSize, settings.fieldSize),
-      y: 25,
-      z: rand(-settings.fieldSize, settings.fieldSize),
-      w: rand(0.5, 2),
-      shape: Math.floor(rand(2, 3.9))
-    }]
-  }
-
   for(let i = 0; i < settings.fireflyCount; i++) {
     fireflies = [...fireflies, {
       x: rand(-settings.fieldSize, settings.fieldSize),
@@ -210,25 +192,16 @@ function main() {
     }]
   }
 
-  function interp(arr1, arr2, step) {
-    return arr1.map((el, id) => el * step + arr2[id] * (1 - step));
-  }
-
   let then = 0;
   const fpsElem = document.querySelector("#fps");
 
-  function dis(v1, v2) {
-    return v1.map((el, id) => (el - v2[id])*(el - v2[id])).reduce((a, b) => a + b);
-  }
-
   function render(time) {
-    time *= 0.001; // convert to seconds
+    time *= 0.001;
     time += 7;
-    const deltaTime = time - then; // compute time since last frame
-    then = time; // remember time for next frame
-    const fps = 1 / deltaTime; // compute frames per second
-    fpsElem.textContent = fps.toFixed(1); // update fps display
-
+    const deltaTime = time - then;
+    then = time;
+    const fps = 1 / deltaTime;
+    fpsElem.textContent = fps.toFixed(1);
 
     twgl.resizeCanvasToDisplaySize(gl.canvas);
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
@@ -270,7 +243,6 @@ function main() {
       if(keys['KeyX']) cameraTranslate = [cameraTranslate[0], cameraTranslate[1]+movementSpeed, cameraTranslate[2]];
     }
 
-    // Compute the camera's matrix using look at.
     const camera = m4.lookAt(cameraPosition, target, up);
     m4.inverse(camera, view);
     let treeGrid = settings.treeGrid;
@@ -278,9 +250,7 @@ function main() {
     const treeAnchor = [Math.floor(playerPosition[0] / treeGrid) * treeGrid, Math.floor(playerPosition[1] / treeGrid) * treeGrid, Math.floor(playerPosition[2] / treeGrid) * treeGrid];
     const plantAnchor = [Math.floor(playerPosition[0] / plantGrid) * plantGrid, Math.floor(playerPosition[1] / plantGrid) * plantGrid, Math.floor(playerPosition[2] / plantGrid) * plantGrid];
     let treeOffset = Math.floor(settings.fieldSize / treeGrid) * treeGrid;
-    //if(treeOffset % 2 != 0) treeOffset++;
     let plantOffset = Math.floor(settings.fieldSize / plantGrid) * plantGrid;
-    //if(plantOffset % 2 != 0) plantOffset++;
 
     gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.BLEND);
@@ -361,7 +331,6 @@ function main() {
         let scale = 0.3;
         let a = noise.perlin3(i * scale, j * scale, time * 0.7) * Math.PI ;
         let a2 = noise.perlin2(i * scale, j * scale) * Math.PI * (Math.abs(noise.perlin2(i * scale + 100, j * scale + 100)) + 1);
-        //let off1 = 0, off2 = 0;
         let off1 = Math.cos(a) * 0.1, off2 = Math.sin(a) * 0.1;
         let off3 = Math.cos(a2), off4 = Math.sin(a2);
         let pos = [i - off2 + off3, 0.5, j + off1 + off4]
@@ -371,9 +340,6 @@ function main() {
         world = m4.scale(world, [w, w, w]);
         world = m4.rotateX(world, Math.PI / 2 + off1);
         world = m4.rotateY(world, off2);
-        //let ang = Math.atan2( target[2] - playerPosition[2], target[0] - playerPosition[0] );
-        //world = m4.rotateZ(world, ang + Math.PI / 2);
-        //world = m4.rotateZ(world, plants[i].rotate);
         let worldInverseTranspose = m4.transpose(m4.inverse(world));
 
         let xoff = 1.0 / (plantTypes+1);
@@ -409,69 +375,12 @@ function main() {
         twgl.drawBufferInfo(gl, shape);
       }
 
-
-    /*for (let i = 0; i < plantCount; i++) {
-      let scale = 0.1;
-      let a = noise.perlin3(plants[i].x * scale, plants[i].z * scale, time * 0.7) * Math.PI * 0.1;
-      //let off1 = 0, off2 = 0;
-      let off1 = Math.cos(a), off2 = Math.sin(a);
-      let pos = [plants[i].x - off2, plants[i].y, plants[i].z + off1]
-      let world = m4.translate(m4.identity(), pos);
-      world = m4.translate(world, [0, plants[i].w/2, 0]);
-      world = m4.scale(world, [plants[i].w, plants[i].w, plants[i].w]);
-      world = m4.rotateX(world, Math.PI / 5.5 + off1);
-      world = m4.rotateY(world, off2);
-      let ang = Math.atan2( target[2] - playerPosition[2], target[0] - playerPosition[0] );
-      //world = m4.rotateZ(world, ang + Math.PI / 2);
-      //world = m4.rotateZ(world, plants[i].rotate);
-      let worldInverseTranspose = m4.transpose(m4.inverse(world));
-
-      twgl.setUniforms(programInfo, {
-        u_worldInverseTranspose: worldInverseTranspose,
-        u_world: world,
-        u_texture: twoDTextures[0],
-      });
-      let xoff = 1.0 / plantTypes;
-      let xcoord = plants[i].type*xoff;
-      twgl.setAttribInfoBufferFromArray(gl, shape.attribs.a_texcoord, new Float32Array([xcoord, 0, xcoord+xoff, 0, xcoord, 1, xcoord+xoff, 1]));
-
-      twgl.drawBufferInfo(gl, shape);
-      world = m4.rotateZ(world, Math.PI / 2);
-      worldInverseTranspose = m4.transpose(m4.inverse(world));
-
-      twgl.setUniforms(programInfo, {
-        u_worldInverseTranspose: worldInverseTranspose,
-        u_world: world
-      });
-      
-      twgl.drawBufferInfo(gl, shape);
-    }*/
-
-    
-
     // trees
 
     twgl.setUniforms(programInfo, {
       u_shininess: settings.stoneShininess,
       u_texture: textures.bark,
     });
-    
-    /*for (let i = 0; i < treeCount; i++) {
-      
-      let pos = [trees[i].x, trees[i].y, trees[i].z];
-      let world = m4.scale(m4.translate(m4.identity(), pos), [trees[i].w, 1, trees[i].w]);
-      let worldInverseTranspose = m4.transpose(m4.inverse(world));
-
-      twgl.setUniforms(programInfo, {
-        u_worldInverseTranspose: worldInverseTranspose,
-        u_world: world,
-      });
-
-      shape = shapes[trees[i].shape];
-      twgl.setBuffersAndAttributes(gl, programInfo, shape);
-      twgl.drawBufferInfo(gl, shape);
-    }*/
-
 
     for(let i = treeAnchor[0] - treeOffset; i <= treeAnchor[0] + treeOffset; i+=treeGrid)
       for(let j = treeAnchor[2] - treeOffset; j <= treeAnchor[2] + treeOffset; j+=treeGrid) {
@@ -497,7 +406,6 @@ function main() {
 
     shape = shapes[1];
     
-
     twgl.setUniforms(programInfo, {
       u_texture: textures.ground,
       u_shininess: settings.groundShininess,
