@@ -53,26 +53,16 @@
   varying float v_distToFlash;
   
   void main() {
-    // Multiply the position by the matrix.
     gl_Position = u_projection * u_view * u_world * a_position;
   
-    // Pass the texcoord to the fragment shader.
     v_texcoord = a_texcoord;
   
-    // Pass just the negated z position relative to the camera.
-    // the camera is looking in the -z direction so normally stuff
-    // in front of the camera has a negative Z position
-    // but by negating he we get a positive depth.
     v_fogDepth = length(u_viewWorldPosition - (u_world * a_position).xyz);
   
-    // orient the normals and pass to the fragment shader
     v_normal = mat3(u_worldInverseTranspose) * a_normal;
   
-    // compute the world position of the surface
     vec3 surfaceWorldPosition = (u_world * a_position).xyz;
   
-    // compute the vector of the surface to the light
-    // and pass it to the fragment shader
     for(int i = 0; i < MAX_LIGHTS; i++) {
       if(i >= u_lightCount) break;
       v_surfacesToLights[i] = u_lights[i].position - surfaceWorldPosition;
@@ -82,8 +72,6 @@
     v_surfaceToFlash = u_flashPosition - surfaceWorldPosition;
     v_distToFlash = length(v_surfaceToFlash);
   
-    // compute the vector of the surface to the view/camera
-    // and pass it to the fragment shader
     v_surfaceToView = normalize(u_viewWorldPosition - surfaceWorldPosition);
   }
   </script>
@@ -93,7 +81,6 @@
 
   #define MAX_LIGHTS 20
   
-  // Passed in from the vertex shader.
   varying vec2 v_texcoord;
   varying float v_fogDepth;
   varying vec3 v_normal;
@@ -114,10 +101,6 @@
   uniform Light u_lights[MAX_LIGHTS];
   uniform highp int u_lightCount;
   uniform vec3 u_ambientColor;
-  uniform float u_lightConstant;
-  uniform float u_lightLinear;
-  uniform float u_lightQuadratic;
-  uniform float u_ambient;
   
   uniform float u_shininess;
   uniform int u_nocolor;
@@ -132,7 +115,6 @@
   uniform float u_fogFar;
   uniform float u_subdivide;
   
-  // The texture.
   uniform sampler2D u_texture;
   
   void main() {
@@ -146,10 +128,8 @@
     if(color.a < 0.1) discard;
   
     vec4 resColor = vec4(0.0, 0.0, 0.0, 1.0);
+    resColor.rgb += 0.1 * color.rgb;
 
-    // because v_normal is a varying it's interpolated
-    // so it will not be a unit vector. Normalizing it
-    // will make it a unit vector again
     vec3 normal = normalize(v_normal);
 
     vec3 surfaceToViewDirection = normalize(v_surfaceToView);
@@ -175,15 +155,8 @@
       }
 
       float attenuation = 1.0 / (1.0 + v_distsToLights[i] * linear + v_distsToLights[i] * v_distsToLights[i] * quadratic);
-    
-      // Lets multiply just the color portion (not the alpha)
-      // by the light
       resColor.rgb += color.rgb * light * u_lights[i].color * u_lights[i].intensity * attenuation;
-    
-      // Just add in the specular
       resColor.rgb += specular * u_lights[i].specularColor * u_lights[i].intensity * attenuation;
-
-      resColor.rgb += u_ambient * color.rgb * u_lights[i].color * attenuation;
     }
 
     if(u_flash) {
@@ -219,13 +192,6 @@
   }
 </script>
 
-<!--
-for most samples webgl-utils only provides shader compiling/linking and
-canvas resizing because why clutter the examples with code that's the same in every sample.
-See https://webglfundamentals.org/webgl/lessons/webgl-boilerplate.html
-and https://webglfundamentals.org/webgl/lessons/webgl-resizing-the-canvas.html
-for webgl-utils, m3, m4, and webgl-lessons-ui.
--->
 <script src="https://webglfundamentals.org/webgl/resources/webgl-utils.js"></script>
 <script src="https://webglfundamentals.org/webgl/resources/m4.js"></script>
 <script src="https://webglfundamentals.org/webgl/resources/webgl-lessons-ui.js"></script>
