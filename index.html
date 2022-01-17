@@ -85,8 +85,6 @@
     // compute the vector of the surface to the view/camera
     // and pass it to the fragment shader
     v_surfaceToView = normalize(u_viewWorldPosition - surfaceWorldPosition);
-
-    //v_distToLight = length(u_lightWorldPosition - (u_world * a_position).xyz);
   }
   </script>
   <!-- fragment shader -->
@@ -211,8 +209,6 @@
       }
     }
 
-    //resColor.rgb += vec3(vec4(u_ambientColor, 1.0) * 0.1 * color);
-    //if(color.a > 0.01) {
     if(u_nocolor > 0) {
       resColor = vec4(1.0, 1.0, 1.0, 1.0);
     }
@@ -220,7 +216,6 @@
     float fogAmount = smoothstep(u_fogNear, u_fogFar, v_fogDepth);
     resColor = mix(resColor, u_fogColor, u_nocolor == 0 ? fogAmount : u_nocolor == 1 ?  0.5*fogAmount : 0.0);
     gl_FragColor = resColor;
-    //}
   }
 </script>
 
